@@ -19,17 +19,13 @@ jobs:
           cd $HOME/fripack-bin
           RELEASE_JSON=$(curl -s https://api.github.com/repos/std-microblock/fripack/releases/latest)
           DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[].browser_download_url | select(test("linux-gnu"))' | head -n 1)
+          if [ -z "$DOWNLOAD_URL" ]; then
+            echo "ERROR: Could not find Linux asset"
+            exit 1
+          fi
           curl -L -o fripack "$DOWNLOAD_URL"
           chmod +x fripack
           echo "$HOME/fripack-bin" >> $GITHUB_PATH
-
-      - name: Download custom V8-enabled fripack-inject
-        run: |
-          mkdir -p $HOME/.fripack
-          curl -L -o $HOME/.fripack/fripack-inject-17.18.0-android-arm64.so \
-            "https://github.com/SONICXX2011/fripack-inject/releases/download/17.18.0/fripack-inject-17.18.0-android-arm64.so"
-          ls -la $HOME/.fripack/
-          file $HOME/.fripack/fripack-inject-17.18.0-android-arm64.so
 
       - name: Verify agent.js
         run: |
@@ -39,14 +35,14 @@ jobs:
       - name: Build .so with Fripack
         run: fripack build so
 
-      - name: Check output size
+      - name: Check output
         run: |
           ls -laR ./fripack_output/ 2>/dev/null || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fripack-so-android-arm64-v8
+          name: fripack-so-android-arm64
           path: |
             ./fripack_output/*.so
           if-no-files-found: error

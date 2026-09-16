@@ -2,7 +2,7 @@
   "so": {
     "type": "shared",
     "version": "1.0.0",
-    "fridaVersion": "17.18.0",
+    "fridaVersion": "17.17.0",
     "entry": "agent/agent.js",
     "platform": "android-arm64",
     "outputDir": "./fripack_output"
