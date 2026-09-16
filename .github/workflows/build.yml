@@ -1,0 +1,43 @@
+name: Build Fripack .so
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frida-compile
+        run: npm install -g frida-compile
+
+      - name: Bundle agent script
+        run: frida-compile agent/agent.js -o _agent.js
+
+      - name: Install Fripack
+        run: cargo install --git https://github.com/std-microblock/fripack/
+
+      - name: Build with Fripack
+        run: |
+          sed -i 's/"entry": "agent.js"/"entry": "_agent.js"/' fripack.json
+          fripack build so
+
+      - name: Upload .so artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fripack-so-android-arm64
+          path: ./fripack_output/*.so
+          if-no-files-found: error

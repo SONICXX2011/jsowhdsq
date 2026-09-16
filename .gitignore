@@ -1,0 +1,5 @@
+fripack_output/
+_agent.js
+node_modules/
+*.keystore
+.DS_Store
