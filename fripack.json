@@ -3,7 +3,7 @@
     "type": "shared",
     "version": "1.0.0",
     "fridaVersion": "17.17.0",
-    "entry": "agent/final.obf.js",
+    "entry": "agent/final.js",
     "platform": "android-arm64",
     "outputDir": "./fripack_output"
   }
