@@ -17,20 +17,28 @@ jobs:
         run: |
           mkdir -p $HOME/fripack-bin
           cd $HOME/fripack-bin
-          
-          # دریافت خودکار لینک دانلود آخرین نسخه از GitHub API
-          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/std-microblock/fripack/releases/latest \
-            | grep "browser_download_url.*linux.*x64.*zip" \
-            | head -n 1 \
-            | cut -d '"' -f 4)
-          
+
+          # دریافت اطلاعات آخرین نسخه از GitHub API
+          RELEASE_JSON=$(curl -s https://api.github.com/repos/std-microblock/fripack/releases/latest)
+
+          # استخراج URL دانلود با jq (فیلتر بر اساس linux و x64)
+          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[].browser_download_url | select(test("linux.*x64.*\\.zip"))' | head -n 1)
+
+          # اگر URL پیدا نشد، خطا بده
+          if [ -z "$DOWNLOAD_URL" ]; then
+            echo "ERROR: Could not find a Linux x64 asset in the latest release."
+            echo "Available assets:"
+            echo "$RELEASE_JSON" | jq -r '.assets[].name'
+            exit 1
+          fi
+
           echo "Downloading from: $DOWNLOAD_URL"
           curl -L -o fripack.zip "$DOWNLOAD_URL"
-          
+
           # بررسی صحت فایل دانلود شده
           file fripack.zip
           ls -la fripack.zip
-          
+
           unzip -o fripack.zip
           chmod +x fripack
           echo "$HOME/fripack-bin" >> $GITHUB_PATH
