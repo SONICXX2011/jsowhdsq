@@ -13,27 +13,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Fripack
-        run: cargo install --git https://github.com/std-microblock/fripack/
+      - name: Download and extract Fripack binary
+        run: |
+          mkdir -p $HOME/fripack-bin
+          cd $HOME/fripack-bin
+          # دانلود آخرین نسخه لینوکس از صفحه Releases
+          curl -L -o fripack.zip https://github.com/std-microblock/fripack/releases/latest/download/fripack-linux-x64.zip
+          unzip -o fripack.zip
+          chmod +x fripack
+          echo "$HOME/fripack-bin" >> $GITHUB_PATH
 
       - name: Verify agent.js
         run: |
           ls -la agent/agent.js
-          wc -l agent/agent.js
           wc -c agent/agent.js
 
-      - name: Build with Fripack
+      - name: Build .so with Fripack
         run: fripack build so
 
-      - name: List output
-        run: ls -laR ./fripack_output/
+      - name: List output files
+        run: ls -laR ./fripack_output/ || ls -laR ./fripack/ || true
 
       - name: Upload .so artifact
         uses: actions/upload-artifact@v4
         with:
           name: fripack-so-android-arm64
-          path: ./fripack_output/*.so
+          path: |
+            ./fripack_output/*.so
+            ./fripack/*.so
           if-no-files-found: error
