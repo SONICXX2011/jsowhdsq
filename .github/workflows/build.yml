@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -18,32 +18,22 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            git \
-            python3 \
-            python3-pip \
-            python3-venv \
-            lib32stdc++-10-dev \
-            libc6-dev-i386 \
-            autoconf \
-            automake \
-            libtool \
-            pkg-config \
-            libglib2.0-dev \
-            libzip-dev \
-            libssl-dev
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+          sudo apt-get install -y build-essential git python3 python3-pip \
+            nodejs npm lib32stdc++-10-dev libc6-dev-i386 autoconf \
+            automake libtool pkg-config libglib2.0-dev libzip-dev libssl-dev
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
           ndk-version: r25c
+
+      - name: Bootstrap Frida build system
+        run: |
+          # این دستور فایل configure و Makefile را تولید می‌کند
+          make
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
 
       - name: Enable V8 in config.mk
         run: |
