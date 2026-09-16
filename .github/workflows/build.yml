@@ -13,35 +13,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download and extract Fripack binary
+      - name: Download Fripack binary
         run: |
           mkdir -p $HOME/fripack-bin
           cd $HOME/fripack-bin
 
-          # دریافت اطلاعات آخرین نسخه از GitHub API
+          # دریافت اطلاعات آخرین نسخه
           RELEASE_JSON=$(curl -s https://api.github.com/repos/std-microblock/fripack/releases/latest)
 
-          # استخراج URL دانلود با jq (فیلتر بر اساس linux و x64)
-          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[].browser_download_url | select(test("linux.*x64.*\\.zip"))' | head -n 1)
+          # استخراج URL فایل linux-gnu
+          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[].browser_download_url | select(test("linux-gnu"))' | head -n 1)
 
-          # اگر URL پیدا نشد، خطا بده
           if [ -z "$DOWNLOAD_URL" ]; then
-            echo "ERROR: Could not find a Linux x64 asset in the latest release."
-            echo "Available assets:"
-            echo "$RELEASE_JSON" | jq -r '.assets[].name'
+            echo "ERROR: Could not find Linux gnu asset"
             exit 1
           fi
 
-          echo "Downloading from: $DOWNLOAD_URL"
-          curl -L -o fripack.zip "$DOWNLOAD_URL"
+          echo "Downloading: $DOWNLOAD_URL"
+          curl -L -o fripack "$DOWNLOAD_URL"
 
-          # بررسی صحت فایل دانلود شده
-          file fripack.zip
-          ls -la fripack.zip
+          # بررسی
+          file fripack
+          ls -la fripack
 
-          unzip -o fripack.zip
           chmod +x fripack
           echo "$HOME/fripack-bin" >> $GITHUB_PATH
+
+      - name: Verify Fripack
+        run: |
+          fripack --version || fripack --help || true
 
       - name: Verify agent.js
         run: |
@@ -52,7 +52,10 @@ jobs:
         run: fripack build so
 
       - name: List output files
-        run: ls -laR ./fripack_output/ || ls -laR ./fripack/ || true
+        run: |
+          ls -laR ./fripack_output/ 2>/dev/null || true
+          ls -laR ./fripack/ 2>/dev/null || true
+          find . -name "*.so" -not -path "./.git/*" 2>/dev/null || true
 
       - name: Upload .so artifact
         uses: actions/upload-artifact@v4
