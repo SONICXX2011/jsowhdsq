@@ -1,4 +1,4 @@
-name: Build Fripack .so
+name: Build Frida with V8
 
 on:
   push:
@@ -12,56 +12,48 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Download Fripack binary
+      - name: Install dependencies
         run: |
-          mkdir -p $HOME/fripack-bin
-          cd $HOME/fripack-bin
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            git \
+            lib32stdc++-10-dev \
+            libc6-dev-i386 \
+            nodejs \
+            npm \
+            python3-dev \
+            python3-pip \
+            python3-venv \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            libglib2.0-dev \
+            libzip-dev \
+            libssl-dev
 
-          # دریافت اطلاعات آخرین نسخه
-          RELEASE_JSON=$(curl -s https://api.github.com/repos/std-microblock/fripack/releases/latest)
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25b
 
-          # استخراج URL فایل linux-gnu
-          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[].browser_download_url | select(test("linux-gnu"))' | head -n 1)
-
-          if [ -z "$DOWNLOAD_URL" ]; then
-            echo "ERROR: Could not find Linux gnu asset"
-            exit 1
-          fi
-
-          echo "Downloading: $DOWNLOAD_URL"
-          curl -L -o fripack "$DOWNLOAD_URL"
-
-          # بررسی
-          file fripack
-          ls -la fripack
-
-          chmod +x fripack
-          echo "$HOME/fripack-bin" >> $GITHUB_PATH
-
-      - name: Verify Fripack
+      - name: Configure Frida with V8
         run: |
-          fripack --version || fripack --help || true
+          ./configure --host=android-arm64 --enable-v8
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
 
-      - name: Verify agent.js
-        run: |
-          ls -la agent/agent.js
-          wc -c agent/agent.js
+      - name: Build Frida
+        run: make
 
-      - name: Build .so with Fripack
-        run: fripack build so
-
-      - name: List output files
-        run: |
-          ls -laR ./fripack_output/ 2>/dev/null || true
-          ls -laR ./fripack/ 2>/dev/null || true
-          find . -name "*.so" -not -path "./.git/*" 2>/dev/null || true
-
-      - name: Upload .so artifact
+      - name: Upload frida-gadget
         uses: actions/upload-artifact@v4
         with:
-          name: fripack-so-android-arm64
-          path: |
-            ./fripack_output/*.so
-            ./fripack/*.so
+          name: frida-gadget-android-arm64-v8
+          path: build/frida-android-arm64/lib/frida-gadget.so
           if-no-files-found: error
