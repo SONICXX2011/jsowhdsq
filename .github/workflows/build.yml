@@ -1,4 +1,4 @@
-name: Build Frida Gadget with V8 (Android ARM64)
+name: Build Fripack .so
 
 on:
   push:
@@ -12,68 +12,41 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Install system dependencies
+      - name: Download Fripack binary
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential git python3 python3-pip python3-venv \
-            lib32stdc++-10-dev libc6-dev-i386 autoconf automake \
-            libtool pkg-config libglib2.0-dev libzip-dev libssl-dev
+          mkdir -p $HOME/fripack-bin
+          cd $HOME/fripack-bin
+          RELEASE_JSON=$(curl -s https://api.github.com/repos/std-microblock/fripack/releases/latest)
+          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[].browser_download_url | select(test("linux-gnu"))' | head -n 1)
+          curl -L -o fripack "$DOWNLOAD_URL"
+          chmod +x fripack
+          echo "$HOME/fripack-bin" >> $GITHUB_PATH
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r25c
-
-      - name: Bootstrap build scripts
+      - name: Download custom V8-enabled fripack-inject
         run: |
-          # این مرحله فایل‌های configure و Makefile را تولید می‌کند
-          # با اجرای اسکریپت بوت‌استرپ در پوشه releng
-          if [ ! -f "releng/meson/meson.py" ]; then
-            echo "Initializing releng submodule..."
-            git submodule update --init --recursive
-          fi
-          # تولید فایل configure از طریق اسکریپت پایتون
-          python3 releng/meson_configure.py --help > /dev/null 2>&1 || true
-          # اگر فایل configure هنوز وجود ندارد، از اسکریپت اصلی استفاده کن
-          if [ ! -f "configure" ]; then
-            echo "Creating configure wrapper..."
-            cat > configure << 'EOF'
-#!/bin/sh
-exec python3 "$(dirname "$0")/releng/meson_configure.py" "$@"
-EOF
-            chmod +x configure
-          fi
-          ls -la configure Makefile 2>/dev/null || echo "Makefile not yet present"
+          mkdir -p $HOME/.fripack
+          curl -L -o $HOME/.fripack/fripack-inject-17.18.0-android-arm64.so \
+            "https://github.com/SONICXX2011/fripack-inject/releases/download/17.18.0/fripack-inject-17.18.0-android-arm64.so"
+          ls -la $HOME/.fripack/
+          file $HOME/.fripack/fripack-inject-17.18.0-android-arm64.so
 
-      - name: Enable V8 in config.mk
+      - name: Verify agent.js
         run: |
-          if [ -f config.mk ]; then
-            sed -i 's/^FRIDA_V8.*/FRIDA_V8 := enabled/' config.mk
-          else
-            echo "FRIDA_V8 := enabled" > config.mk
-          fi
-          cat config.mk
+          ls -la agent/agent.js
+          wc -c agent/agent.js
 
-      - name: Configure with V8 enabled
-        run: ./configure --host=android-arm64
-        env:
-          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+      - name: Build .so with Fripack
+        run: fripack build so
 
-      - name: Build Frida
-        run: make
+      - name: Check output size
+        run: |
+          ls -laR ./fripack_output/ 2>/dev/null || true
 
-      - name: Upload frida-gadget
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: frida-gadget-android-arm64-v8
-          path: build/frida-android-arm64/lib/frida-gadget.so
+          name: fripack-so-android-arm64-v8
+          path: |
+            ./fripack_output/*.so
           if-no-files-found: error
