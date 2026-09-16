@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository with submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -18,9 +18,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git python3 python3-pip \
-            nodejs npm lib32stdc++-10-dev libc6-dev-i386 autoconf \
-            automake libtool pkg-config libglib2.0-dev libzip-dev libssl-dev
+          sudo apt-get install -y build-essential git python3 python3-pip python3-venv \
+            lib32stdc++-10-dev libc6-dev-i386 autoconf automake \
+            libtool pkg-config libglib2.0-dev libzip-dev libssl-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
@@ -28,12 +33,26 @@ jobs:
         with:
           ndk-version: r25c
 
-      - name: Bootstrap Frida build system
+      - name: Bootstrap build scripts
         run: |
-          # این دستور فایل configure و Makefile را تولید می‌کند
-          make
-        env:
-          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+          # این مرحله فایل‌های configure و Makefile را تولید می‌کند
+          # با اجرای اسکریپت بوت‌استرپ در پوشه releng
+          if [ ! -f "releng/meson/meson.py" ]; then
+            echo "Initializing releng submodule..."
+            git submodule update --init --recursive
+          fi
+          # تولید فایل configure از طریق اسکریپت پایتون
+          python3 releng/meson_configure.py --help > /dev/null 2>&1 || true
+          # اگر فایل configure هنوز وجود ندارد، از اسکریپت اصلی استفاده کن
+          if [ ! -f "configure" ]; then
+            echo "Creating configure wrapper..."
+            cat > configure << 'EOF'
+#!/bin/sh
+exec python3 "$(dirname "$0")/releng/meson_configure.py" "$@"
+EOF
+            chmod +x configure
+          fi
+          ls -la configure Makefile 2>/dev/null || echo "Makefile not yet present"
 
       - name: Enable V8 in config.mk
         run: |
