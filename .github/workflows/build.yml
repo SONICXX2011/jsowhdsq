@@ -1,4 +1,4 @@
-name: Build Fripack .so
+name: Build Fastest Native-Encrypted Fripack
 
 on:
   push:
@@ -10,8 +10,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r25c
+
+      - name: Verify inputs
+        run: |
+          ls -la agent/
+          ls -la native/
+          wc -c agent/agent.js
+
+      - name: Compile native AES library
+        run: |
+          mkdir -p native/build
+          cd native/build
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release
+          make -j$(nproc)
+          ls -la
+          file libaes.so
+
+      - name: Encrypt agent.js
+        run: node encrypt.js
+
+      - name: Obfuscate final.js
+        run: bash obfuscate.sh
 
       - name: Download Fripack binary
         run: |
@@ -19,30 +55,24 @@ jobs:
           cd $HOME/fripack-bin
           RELEASE_JSON=$(curl -s https://api.github.com/repos/std-microblock/fripack/releases/latest)
           DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[].browser_download_url | select(test("linux-gnu"))' | head -n 1)
-          if [ -z "$DOWNLOAD_URL" ]; then
-            echo "ERROR: Could not find Linux asset"
-            exit 1
-          fi
+          if [ -z "$DOWNLOAD_URL" ]; then echo "URL not found"; exit 1; fi
           curl -L -o fripack "$DOWNLOAD_URL"
           chmod +x fripack
           echo "$HOME/fripack-bin" >> $GITHUB_PATH
 
-      - name: Verify agent.js
-        run: |
-          ls -la agent/agent.js
-          wc -c agent/agent.js
-
       - name: Build .so with Fripack
         run: fripack build so
 
-      - name: Check output
+      - name: Prepare artifacts
         run: |
-          ls -laR ./fripack_output/ 2>/dev/null || true
+          mkdir -p output
+          cp fripack_output/*.so output/libsonic-xxxx.so 2>/dev/null || cp fripack_output/*.so output/ || true
+          cp native/build/libaes.so output/libaes.so
+          ls -la output/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fripack-so-android-arm64
-          path: |
-            ./fripack_output/*.so
+          name: fripack-so-native-fast
+          path: output/*.so
           if-no-files-found: error
